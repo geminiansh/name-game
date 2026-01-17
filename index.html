@@ -6,32 +6,49 @@
     <title>The Name Game</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); }
+    </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
 
-    <div id="game-card" class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-auto max-w-md text-center border border-slate-700">
-        <h1 class="text-3xl font-bold mb-2">"Name" Game</h1>
-        <p id="status-msg" class="text-slate-400 mb-6">Enter your secret name for the category!</p>
+    <div id="game-card" class="glass p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border border-slate-700">
+        <h1 class="text-3xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+            NAME GAME
+        </h1>
+        <p id="status-msg" class="text-slate-400 mb-6 text-sm">Agree on a category, then enter your name!</p>
 
-        <div id="timer-display" class="text-5xl font-mono font-bold text-yellow-400 mb-6 hidden">30</div>
+        <div id="timer-display" class="text-6xl font-mono font-bold text-yellow-400 mb-6 hidden">30</div>
 
         <div id="setup-zone">
-            <input type="text" id="name-input" placeholder="Enter name here..." 
-                class="w-full p-3 rounded bg-slate-700 border border-slate-600 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <button onclick="submitName()" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold transition">
-                Submit to Bowl
+            <input type="text" id="name-input" placeholder="e.g. Brad Pitt, Shrek..." 
+                class="w-full p-4 rounded-xl bg-slate-800 border border-slate-600 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+            <button onclick="submitName()" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg transition-all active:scale-95 shadow-lg shadow-blue-900/20">
+                Drop in Bowl
             </button>
         </div>
 
         <div id="results-zone" class="hidden">
-            <h2 class="text-xl font-semibold mb-4 text-green-400">The Digital Bowl:</h2>
-            <ul id="name-list" class="space-y-2 text-left bg-slate-900 p-4 rounded-lg border border-slate-700"></ul>
-            <button onclick="location.reload()" class="mt-6 text-sm text-slate-500 underline">Reset Game</button>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-emerald-400">The Shuffled Bowl</h2>
+                <button onclick="revealNames()" class="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">Refresh List</button>
+            </div>
+            
+            <ul id="name-list" class="space-y-3 text-left bg-slate-900/50 p-4 rounded-xl border border-slate-700 max-h-64 overflow-y-auto">
+                </ul>
+
+            <div class="mt-8 pt-6 border-t border-slate-700 flex flex-col gap-3">
+                <button onclick="clearBowl()" class="w-full bg-red-500/10 border border-red-500/50 text-red-400 hover:bg-red-500 hover:text-white py-3 rounded-xl font-bold transition-all">
+                    Empty Bowl for New Round
+                </button>
+                <p class="text-xs text-slate-500 uppercase tracking-widest">Only one person needs to click this</p>
+            </div>
         </div>
     </div>
 
     <script>
-        // REPLACE THESE WITH YOUR SUPABASE DETAILS
+        // --- CONFIGURATION ---
+        // Replace these with your actual Supabase URL and Anon Key
         const SUPABASE_URL = 'sb_publishable_PT880Z3d7gtnqPHag7AdeQ_EavhzS63';
         const SUPABASE_KEY = 'sb_publishable_PT880Z3d7gtnqPHag7AdeQ_EavhzS63';
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -39,20 +56,25 @@
         let timeLeft = 30;
         let timerId;
 
+        // --- FUNCTIONS ---
+
         async function submitName() {
             const nameInput = document.getElementById('name-input');
             const name = nameInput.value.trim();
 
-            if (!name) return alert("Write something first!");
+            if (!name) return alert("Please enter a name!");
 
-            // 1. Send to Database
+            // 1. Insert into Supabase
             const { error } = await supabase.from('names').insert([{ name_text: name }]);
             
-            if (error) return alert("Error saving name.");
+            if (error) {
+                console.error(error);
+                return alert("Database Error: Check your Supabase settings.");
+            }
 
-            // 2. Start UI Transition
-            document.getElementById('setup-zone').classList.add('opacity-50', 'pointer-events-none');
-            document.getElementById('status-msg').innerText = "Waiting for others...";
+            // 2. Start UI Timer
+            document.getElementById('setup-zone').classList.add('hidden');
+            document.getElementById('status-msg').innerText = "Names will be revealed in...";
             document.getElementById('timer-display').classList.remove('hidden');
             
             startTimer();
@@ -71,39 +93,42 @@
         }
 
         async function revealNames() {
-            // Fetch all names from the database
             const { data, error } = await supabase.from('names').select('name_text');
             
             if (error) return;
 
-            // SHUFFLE the list (The "Fisher-Yates" logic)
+            // Fisher-Yates Shuffle for true randomness
             const shuffled = data.sort(() => Math.random() - 0.5);
 
-            // UI Changes
+            // UI Transitions
             document.getElementById('setup-zone').classList.add('hidden');
             document.getElementById('timer-display').classList.add('hidden');
             document.getElementById('status-msg').classList.add('hidden');
             document.getElementById('results-zone').classList.remove('hidden');
 
             const listEl = document.getElementById('name-list');
+            listEl.innerHTML = ''; // Clear old UI list
+
             shuffled.forEach(item => {
                 const li = document.createElement('li');
-                li.className = "p-2 border-b border-slate-800 last:border-0 text-lg";
-                li.innerText = "• " + item.name_text;
+                li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium text-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-300";
+                li.innerText = item.name_text;
                 listEl.appendChild(li);
             });
+        }
 
-            async function clearBowl() {
-    const { error } = await supabase
-        .from('names')
-        .delete()
-        .neq('id', 0); // This deletes everything
-    
-    if (!error) {
-        alert("Bowl Emptied!");
-        location.reload(); // Refresh the page for a new round
-    }
-}
+        async function clearBowl() {
+            if (!confirm("This will delete ALL names for everyone. Ready for a new round?")) return;
+
+            // Deletes all rows where ID is greater than 0
+            const { error } = await supabase.from('names').delete().gt('id', 0);
+            
+            if (error) {
+                alert("Error clearing bowl.");
+            } else {
+                // Reload page to start fresh
+                window.location.reload();
+            }
         }
     </script>
 </body>
