@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Name Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div id="game-card" class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-auto max-w-md text-center border border-slate-700">
+        <h1 class="text-3xl font-bold mb-2">"Name" Game</h1>
+        <p id="status-msg" class="text-slate-400 mb-6">Enter your secret name for the category!</p>
+
+        <div id="timer-display" class="text-5xl font-mono font-bold text-yellow-400 mb-6 hidden">30</div>
+
+        <div id="setup-zone">
+            <input type="text" id="name-input" placeholder="Enter name here..." 
+                class="w-full p-3 rounded bg-slate-700 border border-slate-600 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="submitName()" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-3 rounded-lg font-bold transition">
+                Submit to Bowl
+            </button>
+        </div>
+
+        <div id="results-zone" class="hidden">
+            <h2 class="text-xl font-semibold mb-4 text-green-400">The Digital Bowl:</h2>
+            <ul id="name-list" class="space-y-2 text-left bg-slate-900 p-4 rounded-lg border border-slate-700"></ul>
+            <button onclick="location.reload()" class="mt-6 text-sm text-slate-500 underline">Reset Game</button>
+        </div>
+    </div>
+
+    <script>
+        // REPLACE THESE WITH YOUR SUPABASE DETAILS
+        const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';
+        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        let timeLeft = 30;
+        let timerId;
+
+        async function submitName() {
+            const nameInput = document.getElementById('name-input');
+            const name = nameInput.value.trim();
+
+            if (!name) return alert("Write something first!");
+
+            // 1. Send to Database
+            const { error } = await supabase.from('names').insert([{ name_text: name }]);
+            
+            if (error) return alert("Error saving name.");
+
+            // 2. Start UI Transition
+            document.getElementById('setup-zone').classList.add('opacity-50', 'pointer-events-none');
+            document.getElementById('status-msg').innerText = "Waiting for others...";
+            document.getElementById('timer-display').classList.remove('hidden');
+            
+            startTimer();
+        }
+
+        function startTimer() {
+            timerId = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer-display').innerText = timeLeft;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerId);
+                    revealNames();
+                }
+            }, 1000);
+        }
+
+        async function revealNames() {
+            // Fetch all names from the database
+            const { data, error } = await supabase.from('names').select('name_text');
+            
+            if (error) return;
+
+            // SHUFFLE the list (The "Fisher-Yates" logic)
+            const shuffled = data.sort(() => Math.random() - 0.5);
+
+            // UI Changes
+            document.getElementById('setup-zone').classList.add('hidden');
+            document.getElementById('timer-display').classList.add('hidden');
+            document.getElementById('status-msg').classList.add('hidden');
+            document.getElementById('results-zone').classList.remove('hidden');
+
+            const listEl = document.getElementById('name-list');
+            shuffled.forEach(item => {
+                const li = document.createElement('li');
+                li.className = "p-2 border-b border-slate-800 last:border-0 text-lg";
+                li.innerText = "• " + item.name_text;
+                listEl.appendChild(li);
+            });
+        }
+    </script>
+</body>
+</html>
