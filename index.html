@@ -32,8 +32,8 @@
 
     <script>
         // REPLACE THESE WITH YOUR SUPABASE DETAILS
-        const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';
-        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        const SUPABASE_URL = 'sb_publishable_PT880Z3d7gtnqPHag7AdeQ_EavhzS63';
+        const SUPABASE_KEY = 'sb_publishable_PT880Z3d7gtnqPHag7AdeQ_EavhzS63';
         const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         let timeLeft = 30;
@@ -92,6 +92,18 @@
                 li.innerText = "• " + item.name_text;
                 listEl.appendChild(li);
             });
+
+            async function clearBowl() {
+    const { error } = await supabase
+        .from('names')
+        .delete()
+        .neq('id', 0); // This deletes everything
+    
+    if (!error) {
+        alert("Bowl Emptied!");
+        location.reload(); // Refresh the page for a new round
+    }
+}
         }
     </script>
 </body>
