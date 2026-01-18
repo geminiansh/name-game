@@ -43,80 +43,96 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        // REPLACE THESE TWO LINES WITH YOUR ACTUAL DATA FROM SUPABASE SETTINGS
-        const SB_URL = 'https://hwnyareeiezkjvvowfxa.supabase.co'; 
-        const SB_KEY = 'sb_publishable_PT880Z3d7gtnqPHag7AdeQ_EavhzS63';
+    // --- 1. CONFIGURATION (CHECK THESE CAREFULLY) ---
+    // Ensure your URL looks like 'https://your-id.supabase.co'
+    const SB_URL = 'https://hwnyareeiezkjvvowfxa.supabase.co'; 
+    const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3bnlhcmVlaWV6a2p2dm93ZnhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2ODYwNjgsImV4cCI6MjA4NDI2MjA2OH0.__F7rV2HIcaAUlPrd8kEaf62xAQZEZlD5ep3vSmiSlk';
 
-        // We use 'mySupabase' to avoid conflict with the global 'supabase' object
-        const mySupabase = supabase.createClient(SB_URL, SB_KEY);
+    // --- 2. INITIALIZATION ---
+    let mySupabase;
+    try {
+        mySupabase = supabase.createClient(SB_URL, SB_KEY);
+    } catch (e) {
+        console.error("Initialization error:", e.message);
+    }
 
-        let timeLeft = 30;
-        let timerId;
+    let timeLeft = 30;
+    let timerId;
 
-        async function submitName() {
-            const nameInput = document.getElementById('name-input');
-            const val = nameInput.value.trim();
+    // --- 3. FUNCTIONS ---
 
-            if (!val) {
-                alert("Please enter a name!");
-                return;
+    async function submitName() {
+        // Safety check to ensure mySupabase exists
+        if (!mySupabase) {
+            alert("Connection error. Please check your Supabase URL/Key.");
+            return;
+        }
+
+        const nameInput = document.getElementById('name-input');
+        const val = nameInput.value.trim();
+
+        if (!val) {
+            alert("Please enter a name!");
+            return;
+        }
+
+        // Send data to Supabase
+        const { error } = await mySupabase
+            .from('names')
+            .insert([{ name_text: val }]);
+        
+        if (error) {
+            console.error("Error details:", error);
+            alert("Database Error: " + error.message);
+            return;
+        }
+
+        // Change UI
+        document.getElementById('setup-zone').classList.add('hidden');
+        document.getElementById('status-msg').innerText = "Revealing in...";
+        document.getElementById('timer-display').classList.remove('hidden');
+        
+        startTimer();
+    }
+
+    function startTimer() {
+        timerId = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer-display').innerText = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(timerId);
+                revealNames();
             }
+        }, 1000);
+    }
 
-            const { error } = await mySupabase
-                .from('names')
-                .insert([{ name_text: val }]);
-            
-            if (error) {
-                console.error("Error details:", error);
-                alert("Database Error: " + error.message);
-                return;
-            }
+    async function revealNames() {
+        const { data, error } = await mySupabase.from('names').select('name_text');
+        if (error) return;
 
-            document.getElementById('setup-zone').classList.add('hidden');
-            document.getElementById('status-msg').innerText = "Revealing in...";
-            document.getElementById('timer-display').classList.remove('hidden');
-            
-            startTimer();
-        }
+        // Shuffle
+        const shuffled = data.sort(() => Math.random() - 0.5);
 
-        function startTimer() {
-            timerId = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timer-display').innerText = timeLeft;
-                if (timeLeft <= 0) {
-                    clearInterval(timerId);
-                    revealNames();
-                }
-            }, 1000);
-        }
+        document.getElementById('setup-zone').classList.add('hidden');
+        document.getElementById('timer-display').classList.add('hidden');
+        document.getElementById('status-msg').classList.add('hidden');
+        document.getElementById('results-zone').classList.remove('hidden');
 
-        async function revealNames() {
-            const { data, error } = await mySupabase.from('names').select('name_text');
-            if (error) return;
+        const listEl = document.getElementById('name-list');
+        listEl.innerHTML = ''; 
+        shuffled.forEach(item => {
+            const li = document.createElement('li');
+            li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium mb-2";
+            li.innerText = item.name_text;
+            listEl.appendChild(li);
+        });
+    }
 
-            const shuffled = data.sort(() => Math.random() - 0.5);
-
-            document.getElementById('setup-zone').classList.add('hidden');
-            document.getElementById('timer-display').classList.add('hidden');
-            document.getElementById('status-msg').classList.add('hidden');
-            document.getElementById('results-zone').classList.remove('hidden');
-
-            const listEl = document.getElementById('name-list');
-            listEl.innerHTML = ''; 
-            shuffled.forEach(item => {
-                const li = document.createElement('li');
-                li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium";
-                li.innerText = item.name_text;
-                listEl.appendChild(li);
-            });
-        }
-
-        async function clearBowl() {
-            if (!confirm("Clear bowl?")) return;
-            const { error } = await mySupabase.from('names').delete().gt('id', 0);
-            if (!error) window.location.reload();
-        }
-    </script>
+    async function clearBowl() {
+        if (!confirm("Clear bowl?")) return;
+        const { error } = await mySupabase.from('names').delete().gt('id', 0);
+        if (!error) window.location.reload();
+    }
+</script>
 </body>
 </html>
