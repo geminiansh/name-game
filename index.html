@@ -8,131 +8,123 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); }
+        .disabled-btn { opacity: 0.5; pointer-events: none; }
     </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
 
     <div id="game-card" class="glass p-8 rounded-3xl shadow-2xl w-full max-w-md text-center border border-slate-700">
-        <h1 class="text-3xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
-            NAME GAME
-        </h1>
-        <p id="status-msg" class="text-slate-400 mb-6 text-sm">Agree on a category, then enter your name!</p>
+        <h1 class="text-3xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 uppercase">Name Game</h1>
+        
+        <div id="timer-display" class="text-6xl font-mono font-bold text-yellow-400 mb-6">--</div>
 
-        <div id="timer-display" class="text-6xl font-mono font-bold text-yellow-400 mb-6 hidden">30</div>
+        <div id="lobby-zone">
+            <p class="text-slate-400 mb-6">Wait for everyone to join, then agree on a category!</p>
+            <button onclick="triggerStart()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-lg mb-4">
+                START GAME FOR ALL
+            </button>
+        </div>
 
-        <div id="setup-zone">
-            <input type="text" id="name-input" placeholder="e.g. Brad Pitt, Shrek..." 
-                class="w-full p-4 rounded-xl bg-slate-800 border border-slate-600 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg text-white">
-            <button onclick="submitName()" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg transition-all active:scale-95 shadow-lg shadow-blue-900/20">
+        <div id="input-zone" class="hidden">
+            <input type="text" id="name-input" placeholder="Enter name fast!" 
+                class="w-full p-4 rounded-xl bg-slate-800 border border-slate-600 mb-4 focus:ring-2 focus:ring-blue-500 text-lg">
+            <button onclick="submitName()" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg">
                 Drop in Bowl
             </button>
         </div>
 
         <div id="results-zone" class="hidden">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-emerald-400">The Shuffled Bowl</h2>
-                <button onclick="revealNames()" class="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">Refresh List</button>
-            </div>
-            <ul id="name-list" class="space-y-3 text-left bg-slate-900/50 p-4 rounded-xl border border-slate-700 max-h-64 overflow-y-auto"></ul>
-            <div class="mt-8 pt-6 border-t border-slate-700 flex flex-col gap-3">
-                <button onclick="clearBowl()" class="w-full bg-red-500/10 border border-red-500/50 text-red-400 hover:bg-red-500 hover:text-white py-3 rounded-xl font-bold transition-all">
-                    Empty Bowl for New Round
-                </button>
-            </div>
+            <h2 class="text-xl font-semibold text-emerald-400 mb-4">The Shuffled Bowl</h2>
+            <ul id="name-list" class="space-y-3 text-left bg-slate-900/50 p-4 rounded-xl border border-slate-700 max-h-64 overflow-y-auto mb-6"></ul>
+            <button onclick="resetGame()" class="w-full bg-red-500/10 border border-red-500/50 text-red-400 py-3 rounded-xl font-bold">New Round</button>
         </div>
     </div>
 
     <script>
-    // --- 1. CONFIGURATION (CHECK THESE CAREFULLY) ---
-    // Ensure your URL looks like 'https://your-id.supabase.co'
-    const SB_URL = 'https://hwnyareeiezkjvvowfxa.supabase.co'; 
-    const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3bnlhcmVlaWV6a2p2dm93ZnhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2ODYwNjgsImV4cCI6MjA4NDI2MjA2OH0.__F7rV2HIcaAUlPrd8kEaf62xAQZEZlD5ep3vSmiSlk';
+        const SB_URL = 'https://hwnyareeiezkjvvowfxa.supabase.co'; 
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3bnlhcmVlaWV6a2p2dm93ZnhhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2ODYwNjgsImV4cCI6MjA4NDI2MjA2OH0.__F7rV2HIcaAUlPrd8kEaf62xAQZEZlD5ep3vSmiSlk';
+        const mySupabase = supabase.createClient(SB_URL, SB_KEY);
 
-    // --- 2. INITIALIZATION ---
-    let mySupabase;
-    try {
-        mySupabase = supabase.createClient(SB_URL, SB_KEY);
-    } catch (e) {
-        console.error("Initialization error:", e.message);
-    }
+        let gameCheckInterval;
+        let countdownInterval;
+        let isGameRunning = false;
 
-    let timeLeft = 30;
-    let timerId;
-
-    // --- 3. FUNCTIONS ---
-
-    async function submitName() {
-        // Safety check to ensure mySupabase exists
-        if (!mySupabase) {
-            alert("Connection error. Please check your Supabase URL/Key.");
-            return;
-        }
-
-        const nameInput = document.getElementById('name-input');
-        const val = nameInput.value.trim();
-
-        if (!val) {
-            alert("Please enter a name!");
-            return;
-        }
-
-        // Send data to Supabase
-        const { error } = await mySupabase
-            .from('names')
-            .insert([{ name_text: val }]);
-        
-        if (error) {
-            console.error("Error details:", error);
-            alert("Database Error: " + error.message);
-            return;
-        }
-
-        // Change UI
-        document.getElementById('setup-zone').classList.add('hidden');
-        document.getElementById('status-msg').innerText = "Revealing in...";
-        document.getElementById('timer-display').classList.remove('hidden');
-        
-        startTimer();
-    }
-
-    function startTimer() {
-        timerId = setInterval(() => {
-            timeLeft--;
-            document.getElementById('timer-display').innerText = timeLeft;
-            if (timeLeft <= 0) {
-                clearInterval(timerId);
-                revealNames();
+        // --- STEP 1: MONITOR GAME START ---
+        async function checkGameStatus() {
+            const { data, error } = await mySupabase.from('game_state').select('*').eq('id', 1).single();
+            if (data && data.is_active && !isGameRunning) {
+                startLocalUI(data.start_time);
             }
-        }, 1000);
-    }
+        }
+        // Check every 2 seconds if someone hit "Start"
+        gameCheckInterval = setInterval(checkGameStatus, 2000);
 
-    async function revealNames() {
-        const { data, error } = await mySupabase.from('names').select('name_text');
-        if (error) return;
+        // --- STEP 2: TRIGGER START (HOST) ---
+        async function triggerStart() {
+            const startTime = new Date().toISOString();
+            await mySupabase.from('game_state').update({ is_active: true, start_time: startTime }).eq('id', 1);
+        }
 
-        // Shuffle
-        const shuffled = data.sort(() => Math.random() - 0.5);
+        // --- STEP 3: RUN COUNTDOWN ---
+        function startLocalUI(dbStartTime) {
+            isGameRunning = true;
+            document.getElementById('lobby-zone').classList.add('hidden');
+            document.getElementById('input-zone').classList.remove('hidden');
 
-        document.getElementById('setup-zone').classList.add('hidden');
-        document.getElementById('timer-display').classList.add('hidden');
-        document.getElementById('status-msg').classList.add('hidden');
-        document.getElementById('results-zone').classList.remove('hidden');
+            const startTime = new Date(dbStartTime).getTime();
+            
+            countdownInterval = setInterval(() => {
+                const now = new Date().getTime();
+                const secondsPassed = Math.floor((now - startTime) / 1000);
+                const timeLeft = 30 - secondsPassed;
 
-        const listEl = document.getElementById('name-list');
-        listEl.innerHTML = ''; 
-        shuffled.forEach(item => {
-            const li = document.createElement('li');
-            li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium mb-2";
-            li.innerText = item.name_text;
-            listEl.appendChild(li);
-        });
-    }
+                if (timeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    document.getElementById('timer-display').innerText = "0";
+                    endSubmission();
+                } else {
+                    document.getElementById('timer-display').innerText = timeLeft;
+                }
+            }, 1000);
+        }
 
-    async function clearBowl() {
-        if (!confirm("Clear bowl?")) return;
-        const { error } = await mySupabase.from('names').delete().gt('id', 0);
-        if (!error) window.location.reload();
-    }
-</script>
+        // --- STEP 4: SUBMIT NAME ---
+        async function submitName() {
+            const val = document.getElementById('name-input').value.trim();
+            if (!val) return alert("Type a name!");
+
+            const { error } = await mySupabase.from('names').insert([{ name_text: val }]);
+            if (!error) {
+                document.getElementById('submit-btn').innerText = "Added to Bowl!";
+                document.getElementById('submit-btn').classList.add('disabled-btn');
+                document.getElementById('name-input').disabled = true;
+            }
+        }
+
+        // --- STEP 5: REVEAL ---
+        async function endSubmission() {
+            document.getElementById('input-zone').classList.add('hidden');
+            document.getElementById('results-zone').classList.remove('hidden');
+            
+            const { data } = await mySupabase.from('names').select('name_text');
+            const shuffled = data.sort(() => Math.random() - 0.5);
+            
+            const listEl = document.getElementById('name-list');
+            listEl.innerHTML = '';
+            shuffled.forEach(item => {
+                const li = document.createElement('li');
+                li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 mb-2";
+                li.innerText = item.name_text;
+                listEl.appendChild(li);
+            });
+        }
+
+        // --- STEP 6: RESET ---
+        async function resetGame() {
+            await mySupabase.from('names').delete().gt('id', 0);
+            await mySupabase.from('game_state').update({ is_active: false, start_time: null }).eq('id', 1);
+            window.location.reload();
+        }
+    </script>
 </body>
 </html>
