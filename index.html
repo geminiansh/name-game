@@ -47,89 +47,93 @@
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        // Replace these with your actual Supabase URL and Anon Key
-        const SUPABASE_URL = 'https://hwnyareeiezkjvvowfxa.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_PT880Z3d7gtnqPHag7AdeQ_EavhzS63';
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // --- CONFIGURATION ---
+    const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL'; // Ensure https:// is included
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+    
+    // FIXED: Changed variable name to 'sbClient' to avoid the "already declared" error
+    const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        let timeLeft = 30;
-        let timerId;
+    let timeLeft = 30;
+    let timerId;
 
-        // --- FUNCTIONS ---
+    // --- FUNCTIONS ---
 
-        async function submitName() {
-            const nameInput = document.getElementById('name-input');
-            const name = nameInput.value.trim();
+    async function submitName() {
+        const nameInput = document.getElementById('name-input');
+        const name = nameInput.value.trim();
 
-            if (!name) return alert("Please enter a name!");
+        if (!name) return alert("Please enter a name!");
 
-            // 1. Insert into Supabase
-            const { error } = await supabase.from('names').insert([{ name_text: name }]);
+        // Use the new 'sbClient' variable here
+        const { error } = await sbClient
+            .from('names')
+            .insert([{ name_text: name }]);
+        
+        if (error) {
+            console.error("Database Error:", error);
+            return alert("Error: " + error.message);
+        }
+
+        // UI Transitions
+        document.getElementById('setup-zone').classList.add('hidden');
+        document.getElementById('status-msg').innerText = "Names will be revealed in...";
+        document.getElementById('timer-display').classList.remove('hidden');
+        
+        startTimer();
+    }
+
+    function startTimer() {
+        timerId = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timer-display').innerText = timeLeft;
             
-            if (error) {
-                console.error(error);
-                return alert("Database Error: Check your Supabase settings.");
+            if (timeLeft <= 0) {
+                clearInterval(timerId);
+                revealNames();
             }
+        }, 1000);
+    }
 
-            // 2. Start UI Timer
-            document.getElementById('setup-zone').classList.add('hidden');
-            document.getElementById('status-msg').innerText = "Names will be revealed in...";
-            document.getElementById('timer-display').classList.remove('hidden');
-            
-            startTimer();
+    async function revealNames() {
+        const { data, error } = await sbClient
+            .from('names')
+            .select('name_text');
+        
+        if (error) {
+            console.error("Fetch Error:", error);
+            return;
         }
 
-        function startTimer() {
-            timerId = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timer-display').innerText = timeLeft;
-                
-                if (timeLeft <= 0) {
-                    clearInterval(timerId);
-                    revealNames();
-                }
-            }, 1000);
+        const shuffled = data.sort(() => Math.random() - 0.5);
+
+        document.getElementById('setup-zone').classList.add('hidden');
+        document.getElementById('timer-display').classList.add('hidden');
+        document.getElementById('status-msg').classList.add('hidden');
+        document.getElementById('results-zone').classList.remove('hidden');
+
+        const listEl = document.getElementById('name-list');
+        listEl.innerHTML = ''; 
+
+        shuffled.forEach(item => {
+            const li = document.createElement('li');
+            li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium text-slate-200";
+            li.innerText = item.name_text;
+            listEl.appendChild(li);
+        });
+    }
+
+    async function clearBowl() {
+        if (!confirm("Clear all names for a new round?")) return;
+
+        const { error } = await sbClient.from('names').delete().gt('id', 0);
+        
+        if (error) {
+            alert("Error clearing bowl.");
+        } else {
+            window.location.reload();
         }
-
-        async function revealNames() {
-            const { data, error } = await supabase.from('names').select('name_text');
-            
-            if (error) return;
-
-            // Fisher-Yates Shuffle for true randomness
-            const shuffled = data.sort(() => Math.random() - 0.5);
-
-            // UI Transitions
-            document.getElementById('setup-zone').classList.add('hidden');
-            document.getElementById('timer-display').classList.add('hidden');
-            document.getElementById('status-msg').classList.add('hidden');
-            document.getElementById('results-zone').classList.remove('hidden');
-
-            const listEl = document.getElementById('name-list');
-            listEl.innerHTML = ''; // Clear old UI list
-
-            shuffled.forEach(item => {
-                const li = document.createElement('li');
-                li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium text-slate-200 animate-in fade-in slide-in-from-bottom-2 duration-300";
-                li.innerText = item.name_text;
-                listEl.appendChild(li);
-            });
-        }
-
-        async function clearBowl() {
-            if (!confirm("This will delete ALL names for everyone. Ready for a new round?")) return;
-
-            // Deletes all rows where ID is greater than 0
-            const { error } = await supabase.from('names').delete().gt('id', 0);
-            
-            if (error) {
-                alert("Error clearing bowl.");
-            } else {
-                // Reload page to start fresh
-                window.location.reload();
-            }
-        }
-    </script>
+    }
+</script>
 </body>
 </html>
