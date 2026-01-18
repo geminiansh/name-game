@@ -22,7 +22,7 @@
 
         <div id="setup-zone">
             <input type="text" id="name-input" placeholder="e.g. Brad Pitt, Shrek..." 
-                class="w-full p-4 rounded-xl bg-slate-800 border border-slate-600 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg">
+                class="w-full p-4 rounded-xl bg-slate-800 border border-slate-600 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg text-white">
             <button onclick="submitName()" id="submit-btn" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-lg transition-all active:scale-95 shadow-lg shadow-blue-900/20">
                 Drop in Bowl
             </button>
@@ -33,107 +33,90 @@
                 <h2 class="text-xl font-semibold text-emerald-400">The Shuffled Bowl</h2>
                 <button onclick="revealNames()" class="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">Refresh List</button>
             </div>
-            
-            <ul id="name-list" class="space-y-3 text-left bg-slate-900/50 p-4 rounded-xl border border-slate-700 max-h-64 overflow-y-auto">
-                </ul>
-
+            <ul id="name-list" class="space-y-3 text-left bg-slate-900/50 p-4 rounded-xl border border-slate-700 max-h-64 overflow-y-auto"></ul>
             <div class="mt-8 pt-6 border-t border-slate-700 flex flex-col gap-3">
                 <button onclick="clearBowl()" class="w-full bg-red-500/10 border border-red-500/50 text-red-400 hover:bg-red-500 hover:text-white py-3 rounded-xl font-bold transition-all">
                     Empty Bowl for New Round
                 </button>
-                <p class="text-xs text-slate-500 uppercase tracking-widest">Only one person needs to click this</p>
             </div>
         </div>
     </div>
 
     <script>
-    // --- CONFIGURATION ---
-    const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL'; // Ensure https:// is included
-    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
-    
-    // FIXED: Changed variable name to 'sbClient' to avoid the "already declared" error
-    const sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // --- CONFIGURATION ---
+        // REPLACE THESE TWO LINES WITH YOUR ACTUAL DATA FROM SUPABASE SETTINGS
+        const SB_URL = 'https://hwnyareeiezkjvvowfxa.supabase.co'; 
+        const SB_KEY = 'sb_publishable_PT880Z3d7gtnqPHag7AdeQ_EavhzS63';
 
-    let timeLeft = 30;
-    let timerId;
+        // We use 'mySupabase' to avoid conflict with the global 'supabase' object
+        const mySupabase = supabase.createClient(SB_URL, SB_KEY);
 
-    // --- FUNCTIONS ---
+        let timeLeft = 30;
+        let timerId;
 
-    async function submitName() {
-        const nameInput = document.getElementById('name-input');
-        const name = nameInput.value.trim();
+        async function submitName() {
+            const nameInput = document.getElementById('name-input');
+            const val = nameInput.value.trim();
 
-        if (!name) return alert("Please enter a name!");
-
-        // Use the new 'sbClient' variable here
-        const { error } = await sbClient
-            .from('names')
-            .insert([{ name_text: name }]);
-        
-        if (error) {
-            console.error("Database Error:", error);
-            return alert("Error: " + error.message);
-        }
-
-        // UI Transitions
-        document.getElementById('setup-zone').classList.add('hidden');
-        document.getElementById('status-msg').innerText = "Names will be revealed in...";
-        document.getElementById('timer-display').classList.remove('hidden');
-        
-        startTimer();
-    }
-
-    function startTimer() {
-        timerId = setInterval(() => {
-            timeLeft--;
-            document.getElementById('timer-display').innerText = timeLeft;
-            
-            if (timeLeft <= 0) {
-                clearInterval(timerId);
-                revealNames();
+            if (!val) {
+                alert("Please enter a name!");
+                return;
             }
-        }, 1000);
-    }
 
-    async function revealNames() {
-        const { data, error } = await sbClient
-            .from('names')
-            .select('name_text');
-        
-        if (error) {
-            console.error("Fetch Error:", error);
-            return;
+            const { error } = await mySupabase
+                .from('names')
+                .insert([{ name_text: val }]);
+            
+            if (error) {
+                console.error("Error details:", error);
+                alert("Database Error: " + error.message);
+                return;
+            }
+
+            document.getElementById('setup-zone').classList.add('hidden');
+            document.getElementById('status-msg').innerText = "Revealing in...";
+            document.getElementById('timer-display').classList.remove('hidden');
+            
+            startTimer();
         }
 
-        const shuffled = data.sort(() => Math.random() - 0.5);
-
-        document.getElementById('setup-zone').classList.add('hidden');
-        document.getElementById('timer-display').classList.add('hidden');
-        document.getElementById('status-msg').classList.add('hidden');
-        document.getElementById('results-zone').classList.remove('hidden');
-
-        const listEl = document.getElementById('name-list');
-        listEl.innerHTML = ''; 
-
-        shuffled.forEach(item => {
-            const li = document.createElement('li');
-            li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium text-slate-200";
-            li.innerText = item.name_text;
-            listEl.appendChild(li);
-        });
-    }
-
-    async function clearBowl() {
-        if (!confirm("Clear all names for a new round?")) return;
-
-        const { error } = await sbClient.from('names').delete().gt('id', 0);
-        
-        if (error) {
-            alert("Error clearing bowl.");
-        } else {
-            window.location.reload();
+        function startTimer() {
+            timerId = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer-display').innerText = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(timerId);
+                    revealNames();
+                }
+            }, 1000);
         }
-    }
-</script>
+
+        async function revealNames() {
+            const { data, error } = await mySupabase.from('names').select('name_text');
+            if (error) return;
+
+            const shuffled = data.sort(() => Math.random() - 0.5);
+
+            document.getElementById('setup-zone').classList.add('hidden');
+            document.getElementById('timer-display').classList.add('hidden');
+            document.getElementById('status-msg').classList.add('hidden');
+            document.getElementById('results-zone').classList.remove('hidden');
+
+            const listEl = document.getElementById('name-list');
+            listEl.innerHTML = ''; 
+            shuffled.forEach(item => {
+                const li = document.createElement('li');
+                li.className = "p-3 bg-slate-800 rounded-lg border-l-4 border-emerald-500 font-medium";
+                li.innerText = item.name_text;
+                listEl.appendChild(li);
+            });
+        }
+
+        async function clearBowl() {
+            if (!confirm("Clear bowl?")) return;
+            const { error } = await mySupabase.from('names').delete().gt('id', 0);
+            if (!error) window.location.reload();
+        }
+    </script>
 </body>
 </html>
